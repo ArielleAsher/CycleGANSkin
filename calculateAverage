@@ -1,0 +1,78 @@
+import re
+
+def extract_and_average(file_path, max_epoch=None, max_batch=None):
+    d_loss_values = []
+    g_loss_values = []
+    d_accuracy_values = []
+    current_epoch = 0
+    current_batch = 0
+    last_valid_epoch = 0
+    
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+        
+        # Reverse the lines to find the most recent complete epoch
+        for line in reversed(lines):
+            epoch_match = re.search(r'\[Epoch (\d+)/20\]', line)
+            if epoch_match:
+                last_valid_epoch = int(epoch_match.group(1))
+                break
+        
+        if max_epoch is None:
+            max_epoch = last_valid_epoch
+        
+        # Extract epoch and batch information
+        for line in lines:
+            epoch_match = re.search(r'\[Epoch (\d+)/20\]', line)
+            batch_match = re.search(r'\[Batch (\d+)\]', line)
+            
+            if epoch_match:
+                current_epoch = int(epoch_match.group(1))
+            if batch_match:
+                current_batch = int(batch_match.group(1))
+            
+            if current_epoch > max_epoch:
+                break
+            
+            #  extracting D loss and G loss and D accuracy
+            d_loss_match = re.search(r'\[D loss: ([0-9\.]+)', line)
+            g_loss_match = re.search(r'\[G loss: \[([0-9\., ]+)\]', line)
+            d_accuracy_match = re.search(r'acc: ([0-9\.]+)', line)
+
+            
+            if d_loss_match and current_epoch <= max_epoch:
+                d_loss_values.append(float(d_loss_match.group(1)))
+            
+            if g_loss_match and current_epoch <= max_epoch:
+                # G loss is a list of values, so we'll average them per line
+                g_loss_values_per_line = [float(x) for x in g_loss_match.group(1).split(',')]
+                # Calculate the average G loss per line
+                g_loss_values.append(sum(g_loss_values_per_line) / len(g_loss_values_per_line))
+                
+            if d_accuracy_match and current_epoch <= max_epoch:
+                d_accuracy_values.append(float(d_accuracy_match.group(1)))
+    
+    # Calculate averages
+    avg_d_loss = sum(d_loss_values) / len(d_loss_values) if d_loss_values else 0
+    avg_g_loss = sum(g_loss_values) / len(g_loss_values) if g_loss_values else 0
+    avg_d_accuracy = sum(d_accuracy_values) / len(d_accuracy_values) if d_accuracy_values else 0
+    
+    print(f"Total D Loss values processed: {len(d_loss_values)}")
+    print(f"Total G Loss values processed: {len(g_loss_values)}")
+    print(f"Total D Accuracy values processed: {len(d_accuracy_values)}")
+    print(f"Last valid epoch found: {last_valid_epoch}")
+    print(f"Average D Loss: {avg_d_loss}")
+    print(f"Average G Loss: {avg_g_loss}")
+    print(f"Average D Accuracy: {avg_d_accuracy}")
+    
+    return {
+        'd_loss_values': d_loss_values,
+        'g_loss_values': g_loss_values,
+        'd_accuracy_values': d_accuracy_values,
+        'avg_d_loss': avg_d_loss,
+        'avg_g_loss': avg_g_loss,
+        'avg_d_accuracy': avg_d_accuracy
+    }
+
+
+result = extract_and_average(r'cycleGAN epochs.txt')
